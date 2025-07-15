@@ -3,15 +3,18 @@ package main
 import (
 	"bytes"
 	"fmt"
+	slug2 "github.com/gosimple/slug"
 	"github.com/joho/godotenv"
 	"github.com/yuin/goldmark"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v2"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -19,6 +22,12 @@ type Post struct {
 	Title   string
 	Slug    string
 	Content template.HTML
+}
+
+type PostMetadata struct {
+	Title string `yaml:"title"`
+	Slug  string `yaml:"slug"`
+	Date  string `yaml:"date"`
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -65,8 +74,30 @@ func handlePosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	content := string(source)
+	var re = regexp.MustCompile(`(?s)^---\n(.*?)\n---\n`)
+	matches := re.FindStringSubmatch(content)
+
+	if len(matches) < 2 {
+		http.Error(w, "Could not find post", http.StatusInternalServerError)
+		return
+	}
+
+	yamlPart := matches[1]
+
+	var meta PostMetadata
+	err = yaml.Unmarshal([]byte(yamlPart), &meta)
+	if err != nil {
+		http.Error(w, "Could not parse post", http.StatusInternalServerError)
+		return
+	}
+
+	mdContent := re.ReplaceAllString(content, "")
+
+	mdContentBytes := []byte(mdContent)
+
 	var buf bytes.Buffer
-	if err := goldmark.Convert(source, &buf); err != nil {
+	if err := goldmark.Convert(mdContentBytes, &buf); err != nil {
 		http.Error(w, "Could not convert posts", http.StatusInternalServerError)
 		return
 	}
@@ -90,6 +121,39 @@ func handleAdmin(w http.ResponseWriter, r *http.Request) {
 func handleNewPost(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("templates/admin/new-post.html"))
 	tmpl.Execute(w, nil)
+}
+
+func handlePostUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Could not parse form", http.StatusInternalServerError)
+		return
+	}
+
+	title := r.FormValue("title")
+	slug := slug2.Make(r.FormValue("title"))
+	content := r.FormValue("content")
+	date := r.FormValue("date")
+
+	filePath := fmt.Sprintf("content/posts/%s.md", slug)
+	md := fmt.Sprintf(`---
+title: %s
+date: %s
+slug: %s
+---
+
+%s
+`, title, date, slug, content)
+	err := os.WriteFile(filePath, []byte(md), 0644)
+	if err != nil {
+		http.Error(w, "Could not upload post", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func main() {
@@ -127,6 +191,11 @@ func main() {
 	http.HandleFunc(
 		"/admin/new-post/",
 		basicAuth(adminUser, adminPass, handleNewPost),
+	)
+
+	http.HandleFunc(
+		"/admin/create-post",
+		basicAuth(adminUser, adminPass, handlePostUpload),
 	)
 
 	fmt.Println("Server running at localhost:8080")
