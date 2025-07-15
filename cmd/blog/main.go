@@ -87,6 +87,11 @@ func handleAdmin(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, nil)
 }
 
+func handleNewPost(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/admin/new-post.html"))
+	tmpl.Execute(w, nil)
+}
+
 func main() {
 
 	err := godotenv.Load()
@@ -117,6 +122,11 @@ func main() {
 	http.HandleFunc(
 		"/admin/",
 		basicAuth(adminUser, adminPass, handleAdmin),
+	)
+
+	http.HandleFunc(
+		"/admin/new-post/",
+		basicAuth(adminUser, adminPass, handleNewPost),
 	)
 
 	fmt.Println("Server running at localhost:8080")
