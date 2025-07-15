@@ -58,6 +58,16 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, posts)
 }
 
+func handleAboutMe(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/about.html"))
+	tmpl.Execute(w, nil)
+}
+
+func handleContactMe(w http.ResponseWriter, r *http.Request) {
+	tmpl := template.Must(template.ParseFiles("templates/contact.html"))
+	tmpl.Execute(w, nil)
+}
+
 func handlePosts(w http.ResponseWriter, r *http.Request) {
 
 	caser := cases.Title(language.English)
@@ -177,6 +187,14 @@ func main() {
 	http.HandleFunc(
 		"/",
 		handleIndex)
+
+	http.HandleFunc(
+		"/about/",
+		handleAboutMe)
+
+	http.HandleFunc(
+		"/contact/",
+		handleContactMe)
 
 	// post shows single post
 	http.HandleFunc(
