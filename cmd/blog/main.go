@@ -19,28 +19,32 @@ import (
 )
 
 type Post struct {
-	Title   string
-	Slug    string
-	Content template.HTML
+	Title    string
+	Slug     string
+	Category string
+	Date     string
+	Excerpt  string
+	Content  template.HTML
 }
 
 type PostMetadata struct {
-	Title string `yaml:"title"`
-	Slug  string `yaml:"slug"`
-	Date  string `yaml:"date"`
+	Title    string `yaml:"title"`
+	Slug     string `yaml:"slug"`
+	Category string `yaml:"category"`
+	Date     string `yaml:"date"`
+	Excerpt  string `yaml:"excerpt"`
 }
 
-func handleIndex(w http.ResponseWriter, r *http.Request) {
-	// Get all md files from posts folder
+func loadPosts() ([]Post, error) {
+	var posts []Post
+
 	files, err := filepath.Glob("content/posts/*.md")
 
 	if err != nil {
-		http.Error(w, "Could not read posts", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	caser := cases.Title(language.English)
-	var posts []Post
 	for _, f := range files {
 		// Slug is set as file name without extension
 		slug := strings.TrimSuffix(filepath.Base(f), ".md")
@@ -51,11 +55,15 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		posts = append(posts, Post{Title: caser.String(slug),
 			Slug: slug})
 	}
+	return posts, nil
+}
+
+func handleIndex(w http.ResponseWriter, r *http.Request, postsToLoad []Post) {
 
 	tmpl := template.Must(template.ParseFiles("templates/index.html"))
 
 	//Execute the template with found posts as context
-	tmpl.Execute(w, posts)
+	tmpl.Execute(w, postsToLoad)
 }
 
 func handleAboutMe(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +175,7 @@ slug: %s
 }
 
 func main() {
+	var posts []Post
 
 	err := godotenv.Load()
 	if err != nil {
@@ -175,6 +184,11 @@ func main() {
 
 	adminUser := os.Getenv("ADMIN_USER")
 	adminPass := os.Getenv("ADMIN_PASSWORD")
+
+	posts, err = loadPosts()
+	if err != nil {
+		log.Fatal("Error loading posts")
+	}
 
 	//redirect requests to static
 	http.Handle(
@@ -186,7 +200,9 @@ func main() {
 	// Index shows list of posts
 	http.HandleFunc(
 		"/",
-		handleIndex)
+		func(w http.ResponseWriter, r *http.Request) {
+			handleIndex(w, r, posts)
+		})
 
 	http.HandleFunc(
 		"/about/",
